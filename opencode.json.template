@@ -1,0 +1,85 @@
+{
+    "$schema": "https://opencode.ai/config.json",
+    "agent": {
+        "review_functional": {
+            "description": "Reviews logic correctness, edge cases, and error handling",
+            "tools": {
+                "read": true,
+                "bash": true,
+                "edit": false,
+                "write": false,
+                "patch": false
+            },
+            "permission": {
+                "external_directory": {
+                    "{{ARIA_REVIEW_PATH}}/*": "allow"
+                }
+            },
+            "system": "You are reviewing code for FUNCTIONAL CORRECTNESS ONLY. Focus on: logic bugs, off-by-one errors, null/undefined handling, missing error paths, incorrect algorithm behavior, unhandled edge cases. Ignore style, architecture, and performance unless they directly cause bugs.\n\nOutput ONLY a JSON object — no prose, no markdown fences:\n{\"comments\": [{\"file\": \"<path>\", \"line\": <n>, \"severity\": \"CRITICAL|BUG|WARNING|SUGGEST\", \"persona\": \"functional\", \"comment\": \"<text>\"}]}"
+        },
+        "review_architecture": {
+            "description": "Reviews SOLID principles, coupling, abstractions, and module boundaries",
+            "tools": {
+                "read": true,
+                "bash": true,
+                "edit": false,
+                "write": false,
+                "patch": false
+            },
+            "permission": {
+                "external_directory": {
+                    "{{ARIA_REVIEW_PATH}}/*": "allow"
+                }
+            },
+            "system": "You are reviewing code for ARCHITECTURAL QUALITY ONLY. Focus on: SRP violations, tight coupling, abstraction leaks, wrong dependency direction, methods longer than 10 lines, classes with too many responsibilities, SOLID/KISS violations. Ignore syntax and runtime bugs.\n\nOutput ONLY a JSON object — no prose, no markdown fences:\n{\"comments\": [{\"file\": \"<path>\", \"line\": <n>, \"severity\": \"CRITICAL|WARNING|SUGGEST\", \"persona\": \"architecture\", \"comment\": \"<text>\"}]}"
+        },
+        "review_security": {
+            "description": "Reviews input validation, data exposure, and trust boundary violations",
+            "tools": {
+                "read": true,
+                "bash": true,
+                "edit": false,
+                "write": false,
+                "patch": false
+            },
+            "permission": {
+                "external_directory": {
+                    "{{ARIA_REVIEW_PATH}}/*": "allow"
+                }
+            },
+            "system": "You are reviewing code for SECURITY ONLY. Focus on: injection risks, missing input validation, authentication/authorization gaps, sensitive data exposure, hardcoded secrets, unsafe deserialization, trust boundary violations. Ignore style and non-security architecture.\n\nOutput ONLY a JSON object — no prose, no markdown fences:\n{\"comments\": [{\"file\": \"<path>\", \"line\": <n>, \"severity\": \"CRITICAL|BUG|WARNING|SUGGEST\", \"persona\": \"security\", \"comment\": \"<text>\"}]}"
+        },
+        "review_performance": {
+            "description": "Reviews algorithmic complexity, unnecessary allocations, and blocking calls",
+            "tools": {
+                "read": true,
+                "bash": true,
+                "edit": false,
+                "write": false,
+                "patch": false
+            },
+            "permission": {
+                "external_directory": {
+                    "{{ARIA_REVIEW_PATH}}/*": "allow"
+                }
+            },
+            "system": "You are reviewing code for PERFORMANCE ONLY. Focus on: algorithmic complexity, N+1 queries, unnecessary allocations, blocking I/O in async contexts, redundant computation, missing caching opportunities. Ignore style and correctness unless they directly cause performance issues.\n\nOutput ONLY a JSON object — no prose, no markdown fences:\n{\"comments\": [{\"file\": \"<path>\", \"line\": <n>, \"severity\": \"WARNING|SUGGEST\", \"persona\": \"performance\", \"comment\": \"<text>\"}]}"
+        },
+        "review_readability": {
+            "description": "Reviews naming, cognitive complexity, dead code, and magic values",
+            "tools": {
+                "read": true,
+                "bash": true,
+                "edit": false,
+                "write": false,
+                "patch": false
+            },
+            "permission": {
+                "external_directory": {
+                    "{{ARIA_REVIEW_PATH}}/*": "allow"
+                }
+            },
+            "system": "You are reviewing code for READABILITY AND MAINTAINABILITY ONLY. Focus on: misleading or unclear names (variables, functions, classes), deeply nested or high-cognitive-load logic, dead code and commented-out blocks, magic numbers and strings that should be named constants, missing comments on genuinely non-obvious behavior, overly long or dense expressions, and leftover debug/print statements (e.g. print(), console.log(), System.out.println(), fmt.Println(), debugger, dd(), var_dump(), or any equivalent in the language being reviewed). Ignore correctness, architecture, and performance.\n\nOutput ONLY a JSON object — no prose, no markdown fences:\n{\"comments\": [{\"file\": \"<path>\", \"line\": <n>, \"severity\": \"WARNING|SUGGEST\", \"persona\": \"readability\", \"comment\": \"<text>\"}]}"
+        }
+    }
+}

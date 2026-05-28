@@ -1,93 +1,153 @@
-# aria
+# ARIA — Automated Review Intelligence Agents
 
+ARIA is a multi-persona AI code review system that integrates with GitLab CI/CD pipelines. When triggered on a merge request, it runs up to five specialized AI reviewers against the changed files and posts inline diff comments directly to the MR.
 
-
-## Getting started
-
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
-
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
-
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+## How It Works
 
 ```
-cd existing_repo
-git remote add origin https://192.168.1.10:8888/truvis/aria.git
-git branch -M main
-git push -uf origin main
+MR trigger
+    └─► gitlab-mr-changed-files.sh   (fetch changed file paths via GitLab API)
+            └─► generate-review-comments.sh  (run each AI persona via opencode CLI)
+                    └─► gitlab-mr-post-comments.sh  (post inline MR discussions)
 ```
 
-## Integrate with your tools
+Each persona has a narrowly scoped focus:
 
-- [ ] [Set up project integrations](https://192.168.1.10:8888/truvis/aria/-/settings/integrations)
+| Persona | Focus |
+|---|---|
+| `functional` | Correctness, logic errors, edge cases |
+| `architecture` | Design patterns, coupling, responsibility boundaries |
+| `security` | Vulnerabilities, injection risks, secret handling |
+| `performance` | Algorithmic complexity, resource usage, bottlenecks |
+| `readability` | Naming, clarity, maintainability |
 
-## Collaborate with your team
+## Prerequisites
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+- GitLab instance with REST API v4
+- Docker (for CI) or local: `bash`, `curl`, `jq`, `python3`, `git`
+- [opencode](https://github.com/sst/opencode) CLI (installed in the Docker image)
 
-## Test and Deploy
+## Project Structure
 
-Use the built-in continuous integration in GitLab.
+```
+aria/
+├── ci/
+│   ├── aria-review.yml             # CI job template — include this in target projects
+│   └── build-image.yml             # Builds and pushes the ARIA Docker image
+├── tests/
+│   ├── test_resolve_profiles.sh
+│   ├── test_generate_config.sh
+│   ├── test_post_comments.sh
+│   └── test_credentials.sh
+├── Dockerfile
+├── opencode.json.template          # opencode agent config template
+├── generate-opencode-config.sh     # Renders opencode.json at runtime
+├── generate-review-comments.sh     # Orchestrates AI persona reviews
+├── gitlab-mr-changed-files.sh      # Fetches changed files from GitLab API
+├── gitlab-mr-post-comments.sh      # Posts findings as inline MR discussions
+└── resolve-profiles.sh             # Filters personas by ARIA_PROFILES
+```
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+## Integration: Adding AI Review to a Project
 
-***
+### 1. Set group-level CI/CD variables
 
-# Editing this README
+In GitLab: **Group → Settings → CI/CD → Variables**
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+| Variable | Required | Description |
+|---|---|---|
+| `GITLAB_URL` | yes | e.g. `https://gitlab.example.com` |
+| `GITLAB_TOKEN` | yes | Token with `api` scope |
+| `ARIA_REVIEW_IMAGE` | yes | e.g. `registry.gitlab.example.com/your-group/aria:latest` |
+| `ARIA_MODEL` | no | e.g. `openai/gpt-4o` |
+| `ARIA_MODEL_API_KEY` | no | Provider API key |
+| `ARIA_MODEL_BASE_URL` | no | Endpoint override for self-hosted LLMs |
+| `ARIA_PROFILES` | no | Comma-separated subset of personas (default: all five) |
 
-## Suggestions for a good README
+### 2. Include the job template
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+```yaml
+# .gitlab-ci.yml in the target project
+include:
+  - project: 'your-group/aria'
+    ref: main
+    file: 'ci/aria-review.yml'
 
-## Name
-Choose a self-explaining name for your project.
+stages:
+  - review
+```
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+### 3. Trigger a review
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+Open an MR → **Pipelines** tab → click **Run** on the `ai_code_review` job. Inline comments appear on the diff when the job completes.
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+## Selective Persona Execution
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+Set `ARIA_PROFILES` to run only specific personas:
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+```
+ARIA_PROFILES=security,performance   # only security and performance
+ARIA_PROFILES=functional             # only functional
+# unset or empty                     # all five personas (default)
+```
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+## Local Development
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+### Run the test suite
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+```bash
+bash tests/test_resolve_profiles.sh
+bash tests/test_generate_config.sh
+bash tests/test_post_comments.sh
+bash tests/test_credentials.sh
+```
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+### Run scripts manually
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+```bash
+# Generate opencode config
+ARIA_REVIEW_PATH=/path/to/repo ./generate-opencode-config.sh > opencode.json
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+# Fetch changed files from an MR
+export GITLAB_URL="https://gitlab.example.com"
+export GITLAB_TOKEN="your-token"
+./gitlab-mr-changed-files.sh <project-id> <mr-iid> > /tmp/changed_files.txt
 
-## License
-For open source projects, say how it is licensed.
+# Run review (requires opencode installed and opencode.json present)
+export FEATURE_BRANCH="feature/your-branch"
+export TARGET_BRANCH="main"
+export CHANGED_FILES="/tmp/changed_files.txt"
+./generate-review-comments.sh /tmp/comments.json
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+# Post comments
+./gitlab-mr-post-comments.sh <project-id> <mr-iid> /tmp/comments.json
+```
+
+### Build the Docker image
+
+```bash
+docker build -t aria:local .
+
+# Verify tooling
+docker run --rm aria:local opencode --version
+docker run --rm aria:local jq --version
+```
+
+## Docker Image
+
+The image is built automatically on every commit to `main` via `ci/build-image.yml` and pushed to the GitLab Container Registry as `$CI_REGISTRY_IMAGE:latest`.
+
+Base: `ubuntu:24.04`  
+Includes: `git`, `curl`, `jq`, `python3`, `opencode` binary, all ARIA scripts at `/opt/aria/`
+
+## Error Handling
+
+ARIA is designed to always leave feedback on the MR:
+
+- Invalid or empty `comments.json` → posts a "no output" or "no issues found" note
+- Failed inline comment positions → falls back to a summary note
+- One persona crashes → remaining personas continue
+
+## Artifacts
+
+The job stores `.aria-review/comments.json` as a GitLab CI artifact (7-day retention), downloadable from the job detail page.
