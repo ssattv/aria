@@ -2,8 +2,9 @@ FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      git curl jq python3 ca-certificates \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+         git curl jq python3 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # NOTE: github.com/sst/opencode redirects to github.com/anomalyco/opencode
