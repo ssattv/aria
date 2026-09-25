@@ -43,8 +43,11 @@ ai_code_review:
       CHANGED_FILES=$(mktemp)
       gitlab-mr-changed-files.sh "$CI_PROJECT_ID" "$CI_MERGE_REQUEST_IID" > "$CHANGED_FILES"
       export CHANGED_FILES
-      export FEATURE_BRANCH="$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
-      export TARGET_BRANCH="$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+      # MR pipelines fetch only refs/pipelines/<id> (checked out as a detached HEAD), so no
+      # branch refs exist; review HEAD and fetch the target branch to diff against
+      git fetch --quiet origin "+refs/heads/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}:refs/remotes/origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}"
+      export FEATURE_BRANCH=HEAD
+      export TARGET_BRANCH="origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
       # Run multi-persona review; || true so the job continues even if a persona crashes
-      generate-review-comments.sh > .aria-review/comments.json || true
+      generate-review-comments.sh .aria-review/comments.json || true
     - gitlab-mr-post-comments.sh "$CI_PROJECT_ID" "$CI_MERGE_REQUEST_IID" .aria-review/comments.json
