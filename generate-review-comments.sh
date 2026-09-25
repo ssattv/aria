@@ -22,8 +22,8 @@ log() { echo "[$(date '+%H:%M:%S')] $*" >&2; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 read -ra PERSONAS <<< "$("$SCRIPT_DIR/resolve-profiles.sh")"
-TMPDIR_WORK="./tmp" #$(mktemp -d)
-# trap 'rm -rf "$TMPDIR_WORK"' EXIT
+TMPDIR_WORK=$(mktemp -d)
+trap 'rm -rf "$TMPDIR_WORK"' EXIT
 
 log "Reviewing '${FEATURE_BRANCH}' against '${TARGET_BRANCH}'"
 log "Changed files: $(wc -l < "$CHANGED_FILES") file(s)"
