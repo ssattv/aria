@@ -31,9 +31,10 @@ Each persona has a narrowly scoped focus:
 
 ```
 aria/
+├── .github/workflows/
+│   └── build-image.yml             # Builds the image and pushes it to ghcr.io
 ├── ci/
-│   ├── aria-review.yml             # CI job template — include this in target projects
-│   └── build-image.yml             # Builds and pushes the ARIA Docker image
+│   └── aria-review.yml             # CI job template — include this in target projects
 ├── tests/
 │   ├── test_resolve_profiles.sh
 │   ├── test_generate_config.sh
@@ -58,7 +59,7 @@ In GitLab: **Group → Settings → CI/CD → Variables**
 |---|---|---|
 | `GITLAB_URL` | yes | e.g. `https://gitlab.example.com` |
 | `GITLAB_TOKEN` | yes | Token with `api` scope |
-| `ARIA_REVIEW_IMAGE` | yes | e.g. `registry.gitlab.example.com/your-group/aria:latest` |
+| `ARIA_REVIEW_IMAGE` | yes | `ghcr.io/ssattv/aria:latest` |
 | `ARIA_MODEL` | no | e.g. `openai/gpt-4o` |
 | `ARIA_MODEL_API_KEY` | no | Provider API key |
 | `ARIA_MODEL_BASE_URL` | no | Endpoint override for self-hosted LLMs |
@@ -135,7 +136,9 @@ docker run --rm aria:local jq --version
 
 ## Docker Image
 
-The image is built automatically on every commit to `main` via `ci/build-image.yml` and pushed to the GitLab Container Registry as `$CI_REGISTRY_IMAGE:latest`.
+The image is built by GitHub Actions (`.github/workflows/build-image.yml`) on every push to `main` of the GitHub mirror, and pushed to GitHub Container Registry as `ghcr.io/ssattv/aria:latest`, plus `ghcr.io/ssattv/aria:sha-<short-sha>` for pinning a build. The GitHub mirror is https://github.com/ssattv/aria. It is built on GitHub because apt downloads are unreliable on our GitLab runner's network.
+
+If the package is private, add a `DOCKER_AUTH_CONFIG` CI/CD variable in GitLab with a GitHub token that has `read:packages`, so runners can pull it.
 
 Base: `ubuntu:24.04`  
 Includes: `git`, `curl`, `jq`, `python3`, `opencode` binary, all ARIA scripts at `/opt/aria/`
