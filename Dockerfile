@@ -17,7 +17,8 @@ RUN curl -fsSL \
       | tar -xz -C /usr/local/bin opencode \
     && chmod +x /usr/local/bin/opencode
 
-COPY gitlab-mr-changed-files.sh \
+COPY aria-review-job.sh \
+     gitlab-mr-changed-files.sh \
      gitlab-mr-post-comments.sh \
      generate-opencode-config.sh \
      generate-review-comments.sh \

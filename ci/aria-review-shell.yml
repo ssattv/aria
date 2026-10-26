@@ -1,0 +1,59 @@
+# ci/aria-review-shell.yml
+# Same AI code review job as ci/aria-review.yml, for projects that only have SHELL-executor
+# runners. A shell executor ignores image:, so this job starts the ARIA image itself with
+# `docker run`, with the MR checkout mounted at the same path.
+# Include this file OR ci/aria-review.yml, not both.
+#
+# Runner: a shell runner tagged "local" that can run `docker` and that runs jobs from
+# unprotected refs (MR pipelines are not protected). To use another tag, override it in
+# your project: ai_code_review: { tags: [my-shell-tag] }
+#
+# Variables: the same as ci/aria-review.yml (GITLAB_URL, GITLAB_TOKEN, ARIA_REVIEW_IMAGE,
+# and the optional ARIA_* ones). They are passed into the container by name.
+#   ARIA_DOCKER_PULL    — docker run --pull policy: always (default), missing, or never.
+#                         Use "missing" if pulling from the registry on every run is unreliable.
+
+ai_code_review:
+  stage: review
+  tags:
+    - local
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+  variables:
+    GIT_DEPTH: "0"
+    ARIA_PROFILES: ""  # override to run a subset, e.g. "functional,readability"
+  artifacts:
+    paths:
+      - .aria-review/comments.json
+    expire_in: 7 days
+    when: always
+  # Everything runs in the ARIA image; don't run the including project's global before_script
+  before_script: []
+  script:
+    - |
+      command -v docker >/dev/null 2>&1 || {
+        echo "ERROR: docker not found on runner '${CI_RUNNER_DESCRIPTION:-unknown}'. This job needs a shell runner that can run docker, or use ci/aria-review.yml on a Docker executor runner." >&2
+        exit 1
+      }
+      : "${ARIA_REVIEW_IMAGE:?ARIA_REVIEW_IMAGE is not set, e.g. ghcr.io/ssattv/aria:latest}"
+    # Fetch the target branch here on the host, where the runner's git credentials and
+    # CA certificate are set up; aria-review-job.sh then skips its own fetch
+    - git fetch --quiet origin "+refs/heads/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}:refs/remotes/origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}"
+    # -e NAME (no value) copies the value from this shell, so secrets never appear on the
+    # command line. --user keeps files in the checkout owned by the runner user, so the
+    # next job can clean them. --network host reaches GitLab and the model API the same
+    # way the runner does. :z lets the container read the checkout when SELinux is on.
+    - |
+      docker run --rm --pull "${ARIA_DOCKER_PULL:-always}" --name "aria-review-${CI_JOB_ID}" \
+        --network host --user "$(id -u):$(id -g)" -e HOME=/tmp \
+        -v "${CI_PROJECT_DIR}:${CI_PROJECT_DIR}:z" -w "${CI_PROJECT_DIR}" \
+        -e CI_PROJECT_DIR -e CI_PROJECT_ID -e CI_MERGE_REQUEST_IID \
+        -e CI_MERGE_REQUEST_TARGET_BRANCH_NAME \
+        -e GITLAB_URL -e GITLAB_TOKEN \
+        -e ARIA_MODEL -e ARIA_MODEL_API_KEY -e ARIA_MODEL_BASE_URL -e ARIA_PROFILES \
+        -e HTTP_PROXY -e HTTPS_PROXY -e NO_PROXY -e http_proxy -e https_proxy -e no_proxy \
+        "${ARIA_REVIEW_IMAGE}" aria-review-job.sh
+  # Remove the container if the job is cancelled or times out while it runs
+  after_script:
+    - docker rm -f "aria-review-${CI_JOB_ID}" >/dev/null 2>&1 || true

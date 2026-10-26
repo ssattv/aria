@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT="$SCRIPT_DIR/../generate-review-comments.sh"
 CI_TEMPLATE="$SCRIPT_DIR/../ci/aria-review.yml"
+JOB_SCRIPT="$SCRIPT_DIR/../aria-review-job.sh"
 
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1" >&2; exit 1; }
@@ -40,10 +41,11 @@ export FEATURE_BRANCH=feature TARGET_BRANCH=main CHANGED_FILES="$WORK/changed.tx
 [[ ! -e ./tmp ]] || fail "script left a ./tmp directory in the reviewed checkout"
 pass "writes merged comments without needing ./tmp in the checkout"
 
-# Test 2: CI template passes the output path as an argument (script does not write JSON to stdout)
-grep -qE '^\s*generate-review-comments\.sh \.aria-review/comments\.json' "$CI_TEMPLATE" \
-  || fail "ci/aria-review.yml must call 'generate-review-comments.sh .aria-review/comments.json'"
-pass "CI template passes output path as an argument"
+# Test 2: the CI job passes the output path as an argument (script does not write JSON to stdout)
+grep -qE '^\s*generate-review-comments\.sh "\$OUTPUT"' "$JOB_SCRIPT" \
+  && grep -qE '^OUTPUT=\.aria-review/comments\.json$' "$JOB_SCRIPT" \
+  || fail "aria-review-job.sh must call 'generate-review-comments.sh \"\$OUTPUT\"' with OUTPUT=.aria-review/comments.json"
+pass "CI job passes output path as an argument"
 
 # Test 3: CI job script works in a merge-request pipeline checkout.
 # MR pipelines fetch only +refs/pipelines/<id> and check it out detached, so neither the
@@ -84,6 +86,19 @@ PATH="$WORK/cibin:$SCRIPT_DIR/..:$PATH" \
 [[ "$(jq -r '.comments[0].comment' "$WORK/posted.json" 2>/dev/null)" == "stub finding" ]] \
   || fail "expected stub finding to reach the post step, got: $(cat "$WORK/posted.json" 2>/dev/null || echo '<nothing posted>')"
 pass "CI job reviews and posts in an MR pipeline checkout (only refs/pipelines/<id> fetched)"
+
+# Test 4: the job does not fetch the target branch again when it is already there.
+# The shell-runner template fetches it on the host, where the runner's git credentials
+# work; inside the container a second fetch would fail.
+rm -f "$WORK/posted.json"
+git remote set-url origin "$WORK/no-such-remote"
+PATH="$WORK/cibin:$SCRIPT_DIR/..:$PATH" \
+  CI_PROJECT_DIR="$WORK/ci" CI_PROJECT_ID=1 CI_MERGE_REQUEST_IID=7 \
+  CI_MERGE_REQUEST_TARGET_BRANCH_NAME=main \
+  "$JOB_SCRIPT" 2>"$WORK/job.err" \
+  || fail "job tried to fetch an already-present target branch: $(tail -3 "$WORK/job.err")"
+[[ -s "$WORK/posted.json" ]] || fail "expected comments to be posted when the target branch was pre-fetched"
+pass "skips the target-branch fetch when origin/<target> already exists"
 
 echo ""
 echo "All review-comments tests passed."
