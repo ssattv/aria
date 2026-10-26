@@ -1,5 +1,0 @@
-include:
-  - local: ci/build-image.yml
-
-stages:
-  - build
