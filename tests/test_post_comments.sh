@@ -91,6 +91,27 @@ grep -q "no issues" "$MOCK_DIR/notes_posted" \
   || fail "expected 'no issues' note for empty comments; notes: $(cat "$MOCK_DIR/notes_posted")"
 pass "empty comments array posts 'no issues' note"
 
+# ---- Test 2b: reviewers failed and found nothing → "did not complete" note, never "no issues" ----
+printf '{"comments":[],"failed_personas":["functional","security"]}' > "$MOCK_DIR/failed.json"
+> "$MOCK_DIR/notes_posted"
+"$SCRIPT" 123 45 "$MOCK_DIR/failed.json"
+grep -q "did not complete" "$MOCK_DIR/notes_posted" \
+  || fail "expected 'did not complete' note when reviewers failed; notes: $(cat "$MOCK_DIR/notes_posted")"
+grep -q "functional, security" "$MOCK_DIR/notes_posted" \
+  || fail "note must name the failed reviewers; notes: $(cat "$MOCK_DIR/notes_posted")"
+grep -q "no issues" "$MOCK_DIR/notes_posted" \
+  && fail "must not post 'no issues' when reviewers failed; notes: $(cat "$MOCK_DIR/notes_posted")"
+pass "failed reviewers with no findings post 'did not complete', not 'no issues'"
+
+# ---- Test 2c: some reviewers failed, others found issues → findings posted plus a failure note ----
+printf '{"comments":[{"file":"a.py","line":1,"severity":"BUG","persona":"functional","comment":"finding A"}],"failed_personas":["security"]}' \
+  > "$MOCK_DIR/partial.json"
+> "$MOCK_DIR/notes_posted"
+"$SCRIPT" 123 45 "$MOCK_DIR/partial.json"
+grep -q "did not complete" "$MOCK_DIR/notes_posted" && grep -q "security" "$MOCK_DIR/notes_posted" \
+  || fail "expected a note naming the failed reviewer next to the findings; notes: $(cat "$MOCK_DIR/notes_posted")"
+pass "partial failure posts findings plus a note naming the failed reviewers"
+
 # ---- Test 3: successful inline draft produces no immediate note; bulk_publish is called ----
 printf '{"comments":[{"file":"src/auth.py","line":42,"severity":"CRITICAL","persona":"security","comment":"SQL injection"}]}' \
   > "$MOCK_DIR/one.json"

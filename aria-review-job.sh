@@ -37,7 +37,14 @@ git rev-parse --verify --quiet "$TARGET_REF" > /dev/null \
 export FEATURE_BRANCH=HEAD
 export TARGET_BRANCH="$TARGET_REF"
 
-# Run multi-persona review; || true so the job continues even if a persona crashes
-generate-review-comments.sh "$OUTPUT" || true
+# Run multi-persona review. If it fails, still post (the MR then says the review did not
+# complete), and fail the job afterwards so the pipeline does not show success.
+review_exit=0
+generate-review-comments.sh "$OUTPUT" || review_exit=$?
 
 gitlab-mr-post-comments.sh "$CI_PROJECT_ID" "$CI_MERGE_REQUEST_IID" "$OUTPUT"
+
+if [[ $review_exit -ne 0 ]]; then
+  echo "ERROR: AI review did not complete (exit ${review_exit}); see the reviewer errors above." >&2
+  exit "$review_exit"
+fi

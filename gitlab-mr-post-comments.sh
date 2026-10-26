@@ -33,7 +33,17 @@ if ! jq empty "$COMMENTS_FILE" 2>/dev/null; then
   exit 0
 fi
 
+failed_personas=$(jq -r '(.failed_personas // []) | join(", ")' "$COMMENTS_FILE")
+post_failed_note() {
+  log "Reviewer(s) failed: ${failed_personas}"
+  post_note "❌ **AI Review did not complete**: reviewer(s) failed: ${failed_personas}. $1 Check the CI job log for the error."
+}
+
 comment_count=$(jq '.comments | length' "$COMMENTS_FILE" 2>/dev/null || echo 0)
+if [[ "$comment_count" -eq 0 && -n "$failed_personas" ]]; then
+  post_failed_note "No review was done for them."
+  exit 0
+fi
 if [[ "$comment_count" -eq 0 ]]; then
   log "No findings — posting clean result"
   post_note "✅ **AI Review**: found no issues in this MR"
@@ -122,6 +132,10 @@ if [[ ${#failed_comments[@]} -gt 0 ]]; then
   done
 
   post_note "$summary"
+fi
+
+if [[ -n "$failed_personas" ]]; then
+  post_failed_note "Findings from the other reviewers are posted above."
 fi
 
 log "Done"

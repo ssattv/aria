@@ -100,5 +100,48 @@ PATH="$WORK/cibin:$SCRIPT_DIR/..:$PATH" \
 [[ -s "$WORK/posted.json" ]] || fail "expected comments to be posted when the target branch was pre-fetched"
 pass "skips the target-branch fetch when origin/<target> already exists"
 
+# Stubs for a reviewer that crashes (like a 401 from the model API) and one that prints junk
+mkdir -p "$WORK/failbin" "$WORK/junkbin"
+cat > "$WORK/failbin/opencode" <<'EOF'
+#!/usr/bin/env bash
+echo "Error: Failed to get direct access token: 401 Unauthorized" >&2
+exit 1
+EOF
+cat > "$WORK/junkbin/opencode" <<'EOF'
+#!/usr/bin/env bash
+echo "I could not finish the review."
+EOF
+chmod +x "$WORK/failbin/opencode" "$WORK/junkbin/opencode"
+
+# Test 5: a crashed reviewer is recorded in failed_personas and the script exits non-zero
+rc=0
+PATH="$WORK/failbin:$PATH" FEATURE_BRANCH=HEAD TARGET_BRANCH=origin/main CHANGED_FILES="$WORK/changed.txt" \
+  ARIA_PROFILES=functional "$SCRIPT" "$WORK/failed.json" 2>/dev/null || rc=$?
+[[ $rc -ne 0 ]] || fail "expected non-zero exit when a reviewer crashes"
+[[ "$(jq -c '.failed_personas' "$WORK/failed.json")" == '["functional"]' ]] \
+  || fail "expected failed_personas [\"functional\"], got: $(cat "$WORK/failed.json")"
+pass "crashed reviewer is listed in failed_personas and the script exits non-zero"
+
+# Test 6: a reviewer whose output has no JSON counts as failed, not as "no findings"
+rc=0
+PATH="$WORK/junkbin:$PATH" FEATURE_BRANCH=HEAD TARGET_BRANCH=origin/main CHANGED_FILES="$WORK/changed.txt" \
+  ARIA_PROFILES=functional "$SCRIPT" "$WORK/junk.json" 2>/dev/null || rc=$?
+[[ $rc -ne 0 ]] || fail "expected non-zero exit when a reviewer prints no JSON"
+[[ "$(jq -c '.failed_personas' "$WORK/junk.json")" == '["functional"]' ]] \
+  || fail "expected failed_personas [\"functional\"], got: $(cat "$WORK/junk.json")"
+pass "unparseable reviewer output is listed in failed_personas"
+
+# Test 7: when a reviewer fails, the job still posts (so the MR says so) and then fails
+rm -f "$WORK/posted.json"
+rc=0
+PATH="$WORK/failbin:$WORK/cibin:$SCRIPT_DIR/..:$PATH" \
+  CI_PROJECT_DIR="$WORK/ci" CI_PROJECT_ID=1 CI_MERGE_REQUEST_IID=7 \
+  CI_MERGE_REQUEST_TARGET_BRANCH_NAME=main ARIA_PROFILES=functional \
+  "$JOB_SCRIPT" 2>/dev/null || rc=$?
+[[ $rc -ne 0 ]] || fail "expected the CI job to fail when a reviewer fails"
+[[ "$(jq -c '.failed_personas' "$WORK/posted.json" 2>/dev/null)" == '["functional"]' ]] \
+  || fail "expected the post step to run with failed_personas, got: $(cat "$WORK/posted.json" 2>/dev/null || echo '<nothing posted>')"
+pass "CI job posts the failure to the MR and then fails"
+
 echo ""
 echo "All review-comments tests passed."

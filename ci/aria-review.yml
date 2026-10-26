@@ -7,7 +7,8 @@
 #   ARIA_REVIEW_IMAGE   — full Docker image ref, e.g. registry.example.com/group/aria:latest
 #
 # Optional (set at group or project level):
-#   ARIA_MODEL          — model identifier, e.g. openai/gpt-4o (omit to use opencode default)
+#   ARIA_MODEL          — <provider>/<model>, e.g. openai/gpt-4o or openrouter/deepseek/deepseek-v4.1-flash-1017
+#                         (omit to use opencode default)
 #   ARIA_MODEL_API_KEY  — provider API key (omit for free/keyless models)
 #   ARIA_MODEL_BASE_URL — endpoint override for local/self-hosted models
 #   ARIA_PROFILES       — comma-separated subset of personas to run, e.g. "functional,readability"

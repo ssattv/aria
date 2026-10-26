@@ -64,8 +64,8 @@ In GitLab: **Group → Settings → CI/CD → Variables**
 | `GITLAB_URL` | yes | e.g. `https://gitlab.example.com` |
 | `GITLAB_TOKEN` | yes | Token with `api` scope |
 | `ARIA_REVIEW_IMAGE` | yes | `ghcr.io/ssattv/aria:latest` |
-| `ARIA_MODEL` | no | e.g. `openai/gpt-4o` |
-| `ARIA_MODEL_API_KEY` | no | Provider API key |
+| `ARIA_MODEL` | no | `<provider>/<model>`, e.g. `openai/gpt-4o`. The first part is the opencode provider, so OpenRouter models need the prefix: `openrouter/deepseek/deepseek-v4.1-flash-1017`. Without the prefix opencode fails with `UnknownError: Unexpected server error` |
+| `ARIA_MODEL_API_KEY` | no | Provider API key. Exported as `<PROVIDER>_API_KEY` (e.g. `OPENROUTER_API_KEY`), so it only works when `ARIA_MODEL` is set |
 | `ARIA_MODEL_BASE_URL` | no | Endpoint override for self-hosted LLMs |
 | `ARIA_PROFILES` | no | Comma-separated subset of personas (default: all five) |
 
@@ -122,6 +122,8 @@ Optional variable: `ARIA_DOCKER_PULL` sets the `docker run --pull` policy: `alwa
 ### 3. Trigger a review
 
 Open an MR → **Pipelines** tab → click **Run** on the `ai_code_review` job. Inline comments appear on the diff when the job completes.
+
+If any reviewer fails (model error, timeout, or output with no JSON), the job posts "❌ AI Review did not complete" naming the failed reviewers, and then the job fails. It never reports "no issues" for a review that did not run.
 
 ## Selective Persona Execution
 

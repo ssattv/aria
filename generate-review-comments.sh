@@ -61,9 +61,12 @@ Output ONLY a raw JSON object — no prose, no markdown fences:
       > "$TMPDIR_WORK/${persona}.raw" \
       2> >(tee "$TMPDIR_WORK/${persona}.err" >&2) || opencode_exit=$?
 
+    # A failed persona leaves a .failed marker, so the merge step can report it
+    # instead of treating it as "no findings"
     if [[ $opencode_exit -eq 124 ]]; then
-      log "  [${persona}] TIMED OUT after 10 min — likely hit token limit; skipping"
+      log "  [${persona}] TIMED OUT after 10 min — likely hit token limit"
       echo '{"comments":[]}' > "$TMPDIR_WORK/${persona}.json"
+      touch "$TMPDIR_WORK/${persona}.failed"
       exit 0
     fi
 
@@ -72,12 +75,11 @@ Output ONLY a raw JSON object — no prose, no markdown fences:
       [[ -s "$TMPDIR_WORK/${persona}.err" ]] && \
         sed "s/^/    [${persona}] /" "$TMPDIR_WORK/${persona}.err" >&2
       echo '{"comments":[]}' > "$TMPDIR_WORK/${persona}.json"
+      touch "$TMPDIR_WORK/${persona}.failed"
       exit 0
     fi
 
-    python3 - "$TMPDIR_WORK/${persona}.raw" <<'PYEOF' \
-      > "$TMPDIR_WORK/${persona}.json" 2>/dev/null \
-      || echo '{"comments":[]}' > "$TMPDIR_WORK/${persona}.json"
+    if ! python3 - "$TMPDIR_WORK/${persona}.raw" > "$TMPDIR_WORK/${persona}.json" 2>/dev/null <<'PYEOF'
 import sys, json, re
 
 text = open(sys.argv[1]).read()
@@ -116,6 +118,12 @@ for i, ch in enumerate(text):
 
 sys.exit(1)
 PYEOF
+    then
+      log "  [${persona}] FAILED — no JSON object with 'comments' in the output"
+      echo '{"comments":[]}' > "$TMPDIR_WORK/${persona}.json"
+      touch "$TMPDIR_WORK/${persona}.failed"
+      exit 0
+    fi
 
     count=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(len(d.get('comments', [])))" \
       "$TMPDIR_WORK/${persona}.json" 2>/dev/null || echo "?")
@@ -128,12 +136,19 @@ log "All personas complete"
 # Merge all persona outputs into a single comments array
 log "Merging results..."
 persona_files=()
+failed_personas=()
 for persona in "${PERSONAS[@]}"; do
   persona_files+=("$TMPDIR_WORK/${persona}.json")
+  [[ -f "$TMPDIR_WORK/${persona}.failed" ]] && failed_personas+=("$persona")
 done
-jq -s '{comments: [.[].comments[] | select(.comment != null)]}' \
-  "${persona_files[@]}" > "$OUTPUT_FILE"
+jq -s '{comments: [.[].comments[] | select(.comment != null)], failed_personas: $ARGS.positional}' \
+  "${persona_files[@]}" --args "${failed_personas[@]}" > "$OUTPUT_FILE"
 log "Results written to '${OUTPUT_FILE}'"
 
 total=$(jq -s '[.[].comments[]] | length' "${persona_files[@]}")
 log "Done — ${total} total finding(s)"
+
+if [[ ${#failed_personas[@]} -gt 0 ]]; then
+  log "ERROR: ${#failed_personas[@]} reviewer(s) failed: ${failed_personas[*]}"
+  exit 1
+fi
