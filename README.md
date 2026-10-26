@@ -39,7 +39,9 @@ aria/
 │   ├── test_resolve_profiles.sh
 │   ├── test_generate_config.sh
 │   ├── test_post_comments.sh
-│   └── test_credentials.sh
+│   ├── test_credentials.sh
+│   ├── test_review_comments.sh
+│   └── test_ci_template.sh
 ├── Dockerfile
 ├── opencode.json.template          # opencode agent config template
 ├── generate-opencode-config.sh     # Renders opencode.json at runtime
@@ -78,6 +80,21 @@ stages:
   - review
 ```
 
+The job is tagged `docker`, so it needs a runner that:
+
+- uses the **Docker executor** (a shell executor ignores `image:`, so opencode and the ARIA scripts are missing and the job fails),
+- has the tag `docker`, and
+- is **not protected** (MR pipelines run on unprotected refs).
+
+To use a different tag, override it in your project:
+
+```yaml
+ai_code_review:
+  tags: [my-docker-runner]
+```
+
+The job sets `before_script: []`, so your project's global `before_script` does not run in it.
+
 ### 3. Trigger a review
 
 Open an MR → **Pipelines** tab → click **Run** on the `ai_code_review` job. Inline comments appear on the diff when the job completes.
@@ -101,6 +118,8 @@ bash tests/test_resolve_profiles.sh
 bash tests/test_generate_config.sh
 bash tests/test_post_comments.sh
 bash tests/test_credentials.sh
+bash tests/test_review_comments.sh
+bash tests/test_ci_template.sh
 ```
 
 ### Run scripts manually

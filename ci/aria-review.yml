@@ -13,10 +13,17 @@
 #   ARIA_PROFILES       — comma-separated subset of personas to run, e.g. "functional,readability"
 #                         (omit to run all: functional, architecture, security, performance, readability)
 #                         Can be overridden per-run via the GitLab "Run pipeline" variable dialog.
+#
+# Runner: needs a Docker-executor runner tagged "docker" that runs jobs from unprotected
+# refs (MR pipelines are not protected). A shell executor ignores image:, so the job
+# would run on the host without opencode or the ARIA scripts. To use another tag,
+# override it in your project: ai_code_review: { tags: [my-docker-tag] }
 
 ai_code_review:
   stage: review
   image: $ARIA_REVIEW_IMAGE
+  tags:
+    - docker
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
@@ -28,7 +35,15 @@ ai_code_review:
       - .aria-review/comments.json
     expire_in: 7 days
     when: always
+  # The image already has every tool; don't run the including project's global before_script
+  before_script: []
   script:
+    - |
+      # Fail clearly if image: was ignored (shell executor) or the image is not the ARIA one
+      command -v generate-opencode-config.sh >/dev/null 2>&1 || {
+        echo "ERROR: ARIA scripts not found on PATH. This job must run in the ARIA_REVIEW_IMAGE image (${ARIA_REVIEW_IMAGE:-unset}) on a Docker executor runner; runner '${CI_RUNNER_DESCRIPTION:-unknown}' does not provide it." >&2
+        exit 1
+      }
     - mkdir -p .aria-review
     - |
       # Map ARIA_MODEL_API_KEY to the provider-specific env var opencode expects
