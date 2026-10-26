@@ -34,7 +34,8 @@ aria/
 ├── .github/workflows/
 │   └── build-image.yml             # Builds the image and pushes it to ghcr.io
 ├── ci/
-│   └── aria-review.yml             # CI job template — include this in target projects
+│   ├── aria-review.yml             # CI job template for Docker-executor runners
+│   └── aria-review-shell.yml       # CI job template for shell runners (uses docker run)
 ├── tests/
 │   ├── test_resolve_profiles.sh
 │   ├── test_generate_config.sh
@@ -44,6 +45,7 @@ aria/
 │   └── test_ci_template.sh
 ├── Dockerfile
 ├── opencode.json.template          # opencode agent config template
+├── aria-review-job.sh              # Runs the whole review for one MR (used by both templates)
 ├── generate-opencode-config.sh     # Renders opencode.json at runtime
 ├── generate-review-comments.sh     # Orchestrates AI persona reviews
 ├── gitlab-mr-changed-files.sh      # Fetches changed files from GitLab API
@@ -94,6 +96,28 @@ ai_code_review:
 ```
 
 The job sets `before_script: []`, so your project's global `before_script` does not run in it.
+
+#### Only shell runners? Use `ci/aria-review-shell.yml`
+
+If your project only has **shell-executor** runners, include `ci/aria-review-shell.yml` instead of `ci/aria-review.yml` (not both):
+
+```yaml
+include:
+  - project: 'your-group/aria'
+    ref: main
+    file: 'ci/aria-review-shell.yml'
+```
+
+This job runs on a shell runner tagged `local` and starts the ARIA image itself with `docker run`:
+
+- The runner checks out the MR on the host, and the job fetches the target branch there. The checkout is mounted into the container at the same path.
+- Variables are passed in by name (`-e GITLAB_TOKEN`), so secret values never appear on the command line or in files.
+- The container runs as the runner user, so files it creates can be cleaned by the next job.
+- The container uses the host network (`--network host`), so it reaches GitLab and the model API the same way the runner does.
+
+Runner needs: the `local` tag (or override `tags:` as above), permission to run `docker`, and not protected.
+
+Optional variable: `ARIA_DOCKER_PULL` sets the `docker run --pull` policy: `always` (default), `missing` or `never`. Use `missing` if pulling from the registry on every run is unreliable.
 
 ### 3. Trigger a review
 
