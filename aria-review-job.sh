@@ -24,8 +24,9 @@ fi
 export ARIA_REVIEW_PATH="$CI_PROJECT_DIR"
 generate-opencode-config.sh > "$CI_PROJECT_DIR/opencode.json"
 
-# Fetch the list of files changed in this MR
-CHANGED_FILES=$(mktemp)
+# Fetch the list of files changed in this MR. It must be inside the checkout: opencode.json
+# only lets reviewers read under ARIA_REVIEW_PATH, and auto-rejects anything else (e.g. /tmp)
+CHANGED_FILES="$CI_PROJECT_DIR/.aria-review/changed-files.txt"
 gitlab-mr-changed-files.sh "$CI_PROJECT_ID" "$CI_MERGE_REQUEST_IID" > "$CHANGED_FILES"
 export CHANGED_FILES
 

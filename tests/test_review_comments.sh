@@ -143,5 +143,27 @@ PATH="$WORK/failbin:$WORK/cibin:$SCRIPT_DIR/..:$PATH" \
   || fail "expected the post step to run with failed_personas, got: $(cat "$WORK/posted.json" 2>/dev/null || echo '<nothing posted>')"
 pass "CI job posts the failure to the MR and then fails"
 
+# Test 8: the changed-files list is inside the checkout.
+# opencode.json only allows reading under ARIA_REVIEW_PATH (the checkout); a list in /tmp
+# is auto-rejected ("permission requested: external_directory (/tmp/*)").
+mkdir -p "$WORK/permbin"
+cat > "$WORK/permbin/opencode" <<'EOF'
+#!/usr/bin/env bash
+# Mimics opencode's external_directory rule: reject the list unless it is under the checkout
+path=$(grep -o "listed in '[^']*'" <<< "$2" | head -1 | sed "s/^listed in '//; s/'$//")
+case "$path" in
+  "$CI_PROJECT_DIR"/*) echo '{"comments":[]}' ;;
+  *) echo "permission requested: external_directory ($path); auto-rejecting" >&2; exit 1 ;;
+esac
+EOF
+chmod +x "$WORK/permbin/opencode"
+rm -f "$WORK/posted.json"
+PATH="$WORK/permbin:$WORK/cibin:$SCRIPT_DIR/..:$PATH" \
+  CI_PROJECT_DIR="$WORK/ci" CI_PROJECT_ID=1 CI_MERGE_REQUEST_IID=7 \
+  CI_MERGE_REQUEST_TARGET_BRANCH_NAME=main ARIA_PROFILES=functional \
+  "$JOB_SCRIPT" 2>"$WORK/job.err" \
+  || fail "reviewer could not read the changed-files list: $(grep -m1 external_directory "$WORK/job.err" || tail -1 "$WORK/job.err")"
+pass "changed-files list is inside the checkout, where opencode may read it"
+
 echo ""
 echo "All review-comments tests passed."
